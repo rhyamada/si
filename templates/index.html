@@ -16,9 +16,9 @@
         <div class="sidebar">
             <nav class="sidebar-nav">
                 <ul class="nav">
-                    <li class="nav-item" v-for="i in menu">
-                        <router-link class="nav-link" :to="i.tipo">
-                            <i :class="'nav-icon fa fa-'+i.icone"></i>{{ i.tipo }}
+                    <li class="nav-item" v-for="item in menu">
+                        <router-link class="nav-link" :to="'/'+item.tipo">
+                            <i :class="'nav-icon fa fa-'+item.icone"></i>{{ item.tipo }}
                         </router-link>
                     </li>
                 </ul>
@@ -35,19 +35,33 @@
     <template id="es">
         <div class="card">
             <div class="card-body" v-if="id">
-                <h3 v-if="id=='novo'">Criando {{ meta.tipo }}</h3>
+                <div v-if="status.success" class="alert alert-success" role="alert">
+                    {{ status.success }}
+                </div>
+                <div v-if="status.error" class="alert alert-danger" role="alert">
+                    {{ status.error }}
+                </div>
+                <h3 v-if="id=='0'">Criando {{ meta.tipo }}</h3>
                 <h3 v-else>Editando {{ meta.tipo }}:{{ id }}</h3>
                 <form @submit="save">
                     <div class="form-group" v-for="c in meta.campos">
                         <label :for="c.i">{{ c.l || c.i }}</label>
-                        <component v-bind:is="c.t" v-bind:name="c.i" v-bind:model="model[c.i]">
+                        <component v-bind:is="c.t" v-model="model[c.i]">
                     </div>
                     <div class="form-group">
                         <div class="btn-group" role="group" aria-label="">
-                            <button type="button" class="btn btn-danger">Apagar</button>
-                            <button type="button" class="btn btn-secondary">Cancelar</button>
-                            <button type="submit" class="btn btn-primary">Salvar</button>
-                            <button type="button" class="btn btn-success">Novo</button>
+                            <button v-if="id!='0'" type="button" class="btn btn-danger" @click="del">
+                                <i class="nav-icon fa fa-trash"></i> Apagar
+                            </button>
+                            <router-link class="btn btn-secondary" :to="'/'+meta.tipo">
+                                <i class="nav-icon fa fa-list"></i> Lista
+                            </router-link>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="nav-icon fa fa-save"></i> {{ (id=='0')?'Criar':'Salvar' }}
+                            </button>
+                            <router-link v-if="id!='0'" class="btn btn-success" :to="'/'+meta.tipo+'/0'">
+                                <i class="nav-icon fa fa-plus"></i> Outro {{ meta.tipo }}
+                            </router-link>
                         </div>
                     </div>
                 </form>
@@ -66,7 +80,7 @@
                     <tbody>
                         <tr v-for="m in model">
                             <th>
-                                <router-link :to="meta.tipo+'/'+m.id">
+                                <router-link :to="'/'+meta.tipo+'/'+m.id">
                                     <i class="nav-icon fa fa-edit"></i>
                                 </router-link>
                             </th>
@@ -76,97 +90,176 @@
                         </tr>
                     </tbody>
                 </table>
+                <router-link class="btn btn-success" :to="'/'+meta.tipo+'/0'">
+                    <i class="nav-icon fa fa-plus"></i> Novo {{ meta.tipo }}
+                </router-link>
             </div>
         </div>
     </template>
     <template id="texto">
-        <input :name="name" class="form-control" v-model="model" type="text" />
+        <input class="form-control" :value="value" @change="$emit('input', $event.target.value)" />
     </template>
     <template id="numero">
-        <input :name="name" class="form-control" v-model="model" type="text" />
+        <input class="form-control" :value.number="value" type="number" @change="$emit('input', $event.target.value)" />
     </template>
     <template id="campos">
-        <input v-for="m in model" :name="name" class="form-control" v-model="m" type="text" />
+        <div>
+            <span class="input-group" v-for="m in value">
+                <input class="form-control" :value="m.i" @change="m.i=$event.target.value;$emit('input', value)" />
+                <select class="form-control" :value="m.t" @change="m.t=$event.target.value;$emit('input', value)">
+                    <option>texto</option>
+                    <option>numero</option>
+                    <option>campos</option>
+                    <option>codigo</option>
+                </select>
+                <input class="form-control" :value="m.d" @change="m.d=$event.target.value;$emit('input', value)" />
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-danger form-control" @click="del(m);"><i
+                            class="nav-icon fa fa-minus"></i> Remover</button>
+                </div>
+            </span>
+            <span class="input-group">
+                <input class="form-control" v-model="N.i" />
+                <select class="form-control" v-model="N.t">
+                    <option>texto</option>
+                    <option>numero</option>
+                    <option>campos</option>
+                    <option>codigo</option>
+                </select>
+                <input class="form-control" v-model="N.d" />
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-success form-control" @click="add"><i
+                            class="nav-icon fa fa-plus"></i> Adicionar</button>
+                </div>
+            </span>
+        </div>
     </template>
     <script src="static/js/vue.js"></script>
     <script src="static/js/vue-router.js"></script>
     <script src="static/js/axios.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
     <script>
-        Vue.component('texto', {
-            props: ['name', 'model'],
-            template: "#texto"
-        })
-        Vue.component('numero', {
-            props: ['name', 'model'],
-            template: "#numero"
-        })
+        Vue.use(VueRouter);
+        Vue.component('texto', { props: ['value'], template: "#texto" })
+        Vue.component('numero', { props: ['value'], template: "#numero" })
         Vue.component('campos', {
-            props: ['name', 'model'],
-            template: "#campos"
+            props: ['value'],
+            template: "#campos",
+            data: () => {
+                const N = { i: '', t: 'texto', d: '' }
+                return { N };
+            },
+            methods: {
+                add(e) {
+                    if (this.N.i) {
+                        this.value.push({ ...this.N });
+                        this.$emit('input', this.value);
+                    }
+                    this.N.i = '';
+                },
+                del(i) {
+                    this.value.splice(this.value.indexOf(i), 1);
+                    this.$emit('input', this.value);
+                }
+            }
         })
-        const Home = Vue.component('Home', { template: "<div>Home</div>" })
         const Entity = Vue.component('Entity', {
             template: '#es',
             props: {
                 tipo: String,
                 id: String,
+                action: String,
             },
             data: () => {
-                const meta = { tipo: "Carregando", campos: [{ i: 'field', l: "Field" }] };
+                const status = {};
+                const meta = {};
                 const model = {};
-                return { meta, model };
+                return { meta, model, status };
             },
             watch: {
                 tipo: {
                     immediate: true,
                     handler(n, o) {
-                        var self = this;
-                        fetch('tipo/' + this.tipo).then(r => { return r.json(); }).then(meta => { self.meta = meta; });
-                        if (self.id) {
-                            fetch(self.tipo + '/' + self.id).then(r => { return r.json(); }).then(j => { self.model = j.model; });
-                        } else {
-                            fetch(self.tipo).then(r => { return r.json(); }).then(j => { self.model = j.model; });
-                        }
+                        let self = this;
+                        axios.get('tipo/' + self.tipo)
+                            .then(function (r) {
+                                self.meta = r.data.model;
+                            })
+                            .catch(function (error) {
+                                self.status.error = error;
+                            });
+                        self.fetch();
                     },
                 },
                 id: {
                     immediate: true,
                     handler(n, o) {
-                        var self = this;
-                        if (this.id) {
-                            fetch(self.tipo + '/' + self.id).then(r => { return r.json(); }).then(j => { self.model = j.model; });
-                        } else {
-                            fetch(self.tipo).then(r => { return r.json(); }).then(j => { self.model = j.model; });
-                        }
+                        this.fetch();
                     },
                 },
             },
-            methods: {                                
+            methods: {
+                fetch() {
+                    let self = this;
+                    let url = self.tipo;
+                    if (self.id) {
+                        url += '/' + self.id;
+                    }
+                    axios.get(url)
+                        .then(function (r) {
+                            self.model = r.data.model;
+                            window.model = self.model;
+                        })
+                        .catch(function (error) {
+                            self.status.error = error;
+                        });
+                },
+                del(e) {
+                    e.preventDefault()
+                    let self = this;
+                    axios.delete(self.tipo + '/' + self.id)
+                        .then(function (r) {
+                            self.status.success = self.tipo + ':' + self.id + 'apagado';
+                            self.$router.push('/' + self.tipo);
+                        })
+                        .catch(function (error) {
+                            self.status.error = error;
+                        });
+                },
                 save(e) {
                     e.preventDefault()
                     let self = this;
-                    axios.post(self.tipo + '/' + self.id, self.model)
-                        .then(function (response) {
-                            console.log(response);
+                    axios.post(self.tipo, { model: self.model })
+                        .then(function (r) {
+                            self.model = r.data.model;
+                            if (self.id == 0){
+                                self.status.success = self.tipo + ':' + self.model.id + ' criado';
+                                self.$router.push('/' + self.tipo + '/' + self.model.id);
+                            } else {
+                                self.status.success = self.tipo + ':' + self.id + ' alterado';
+                            }
                         })
                         .catch(function (error) {
-                            console.log(error);
+                            self.status.success = error;
                         });
                 }
             }
         })
-        const routes = [
-            { path: '/home', component: Home, icon: 'code', title: "Home" },
-            { path: '/:tipo/:id?/:action?', component: Entity, props: true },
-        ]
+        const routes = [{ path: '/:tipo/:id?/:action?', component: Entity, props: true }]
         const router = new VueRouter({ linkExactActiveClass: 'active', routes })
         new Vue({
             router,
             el: '.app-body',
             data() {
-                var menu = [];
-                fetch('/menu').then(r => { return r.json(); }).then(j => { menu.push(...j) });
+                let menu = [];
                 return { menu };
+            },
+            created: function () {
+                let self = this;
+                let c = io();
+                c.on('menu', menu => {
+                    self.menu = menu;
+                });
             }
         })
     </script>

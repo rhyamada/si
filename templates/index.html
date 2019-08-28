@@ -31,16 +31,13 @@
         </aside>
     </div>
     <footer class="app-footer">
+        <div v-for="m in msgs" :class="'alert alert-dismissible fade show alert-'+m.t" role="alert">
+            {{ m.m }}
+        </div>
     </footer>
     <template id="es">
         <div class="card">
             <div class="card-body" v-if="id">
-                <div v-if="status.success" class="alert alert-success" role="alert">
-                    {{ status.success }}
-                </div>
-                <div v-if="status.error" class="alert alert-danger" role="alert">
-                    {{ status.error }}
-                </div>
                 <h3 v-if="id=='0'">Criando {{ meta.tipo }}</h3>
                 <h3 v-else>Editando {{ meta.tipo }}:{{ id }}</h3>
                 <form @submit="save">
@@ -102,34 +99,40 @@
     <template id="numero">
         <input class="form-control" :value.number="value" type="number" @change="$emit('input', $event.target.value)" />
     </template>
+    <template id="relacao">
+        <input class="form-control" :value.number="value" type="number" @change="$emit('input', $event.target.value)" />
+    </template>
     <template id="campos">
         <div>
             <span class="input-group" v-for="m in value">
                 <input class="form-control" :value="m.i" @change="m.i=$event.target.value;$emit('input', value)" />
                 <select class="form-control" :value="m.t" @change="m.t=$event.target.value;$emit('input', value)">
-                    <option>texto</option>
-                    <option>numero</option>
-                    <option>campos</option>
-                    <option>codigo</option>
+                    <option v-for="o in O">{{ o }}</option>
                 </select>
-                <input class="form-control" :value="m.d" @change="m.d=$event.target.value;$emit('input', value)" />
+                <input type="tags" class="form-control" :value="m.d" @change="m.d=$event.target.value;$emit('input', value)" />
                 <div class="input-group-append">
-                    <button type="button" class="btn btn-danger form-control" @click="del(m);"><i
-                            class="nav-icon fa fa-minus"></i> Remover</button>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="exampleRadios1"
+                            value="option1" checked>
+                        <label class="form-check-label" for="exampleRadios1">
+                            Listar
+                        </label>
+                    </div>
+                    <button type="button" class="btn btn-danger form-control" @click="del(m);">
+                        <i class="nav-icon fa fa-minus"></i> Remover
+                    </button>
                 </div>
             </span>
             <span class="input-group">
                 <input class="form-control" v-model="N.i" />
                 <select class="form-control" v-model="N.t">
-                    <option>texto</option>
-                    <option>numero</option>
-                    <option>campos</option>
-                    <option>codigo</option>
+                    <option v-for="o in O">{{ o }}</option>
                 </select>
                 <input class="form-control" v-model="N.d" />
                 <div class="input-group-append">
-                    <button type="button" class="btn btn-success form-control" @click="add"><i
-                            class="nav-icon fa fa-plus"></i> Adicionar</button>
+                    <button type="button" class="btn btn-success form-control" @click="add">
+                        <i class="nav-icon fa fa-plus"></i> Adicionar
+                    </button>
                 </div>
             </span>
         </div>
@@ -137,22 +140,24 @@
     <script src="static/js/vue.js"></script>
     <script src="static/js/vue-router.js"></script>
     <script src="static/js/axios.min.js"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
+    <script src="static/js/socket.io.js"></script>
     <script>
         Vue.use(VueRouter);
         Vue.component('texto', { props: ['value'], template: "#texto" })
         Vue.component('numero', { props: ['value'], template: "#numero" })
+        Vue.component('relacao', { props: ['value'], template: "#relacao" })
         Vue.component('campos', {
             props: ['value'],
             template: "#campos",
             data: () => {
+                const O = ['texto', 'numero', 'campos', 'codigo', 'relacao'];
                 const N = { i: '', t: 'texto', d: '' }
-                return { N };
+                return { N, O };
             },
             methods: {
                 add(e) {
                     if (this.N.i) {
-                        this.value.push({ ...this.N });
+                        this.value.push(Object.assign({}, this.N));
                         this.$emit('input', this.value);
                     }
                     this.N.i = '';
@@ -186,7 +191,7 @@
                                 self.meta = r.data.model;
                             })
                             .catch(function (error) {
-                                self.status.error = error;
+                                self.$root.error(error);
                             });
                         self.fetch();
                     },
@@ -211,7 +216,7 @@
                             window.model = self.model;
                         })
                         .catch(function (error) {
-                            self.status.error = error;
+                            self.$root.error(error);
                         });
                 },
                 del(e) {
@@ -219,11 +224,10 @@
                     let self = this;
                     axios.delete(self.tipo + '/' + self.id)
                         .then(function (r) {
-                            self.status.success = self.tipo + ':' + self.id + 'apagado';
                             self.$router.push('/' + self.tipo);
                         })
                         .catch(function (error) {
-                            self.status.error = error;
+                            self.$root.error(error);
                         });
                 },
                 save(e) {
@@ -232,15 +236,14 @@
                     axios.post(self.tipo, { model: self.model })
                         .then(function (r) {
                             self.model = r.data.model;
-                            if (self.id == 0){
-                                self.status.success = self.tipo + ':' + self.model.id + ' criado';
+                            if (self.id == 0) {
                                 self.$router.push('/' + self.tipo + '/' + self.model.id);
                             } else {
                                 self.status.success = self.tipo + ':' + self.id + ' alterado';
                             }
                         })
                         .catch(function (error) {
-                            self.status.success = error;
+                            self.$root.error(error);
                         });
                 }
             }
@@ -252,7 +255,8 @@
             el: '.app-body',
             data() {
                 let menu = [];
-                return { menu };
+                let msgs = [];
+                return { menu, msgs };
             },
             created: function () {
                 let self = this;
@@ -260,7 +264,16 @@
                 c.on('menu', menu => {
                     self.menu = menu;
                 });
+            },
+            methods: {
+                error(e) {
+                    this.msgs.push({ t: 'error', m: e });
+                },
+                success(e) {
+                    this.msgs.push({ t: 'success', m: e });
+                }
             }
+
         })
     </script>
 </body>

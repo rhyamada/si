@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects import postgresql
 from flask_socketio import SocketIO, emit
 from sqlalchemy import event
+from sqlalchemy.orm import mapper, sessionmaker, aliased
 import os
 
 import eventlet
@@ -49,8 +50,9 @@ def resp(doc):
 @app.route('/<string:t>',methods=['GET'])
 def list(t):
     model = []
+    filter = [ Doc.d[k].astext == v for k,v in request.args.items() if k[0] != '_']
     g = request.args.get
-    for r in Doc.query.filter(Doc.t==t).limit(g('_size',20)):
+    for r in Doc.query.filter(Doc.t==t).filter(*filter).limit(g('_size',20)):
         d = dict(r.d)
         d.update(id=r.id)
         model.append(d)
@@ -129,6 +131,8 @@ with app.app_context():
         dict(i='campos',t='campos',d=[])]
         )))
     db.session.commit()
+
+
 
 if __name__ == "__main__":
     socketio.run(app,host='0.0.0.0',port=os.environ['PORT'])
